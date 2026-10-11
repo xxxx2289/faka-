@@ -1,0 +1,96 @@
+package cn.xiaobai.acgfaka.user.core
+
+import okhttp3.Cookie
+import okhttp3.CookieJar
+import okhttp3.FormBody
+import okhttp3.HttpUrl
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+import java.util.concurrent.TimeUnit
+
+/**
+ * 全局 HTTP 层。会话用内存 CookieJar 维持 ACG-SHOP 会话。
+ * 测试环境走内网 IP + http，允许明文；生产建议切 https。
+ */
+object Http {
+    @Volatile var baseUrl: String = ""
+
+    private val cookieJar = object : CookieJar {
+        private val store = mutableMapOf<String, MutableList<Cookie>>()
+        override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+            synchronized(store) {
+                val list = store.getOrPut(url.host) { mutableListOf() }
+                for (c in cookies) {
+                    list.removeAll { it.name == c.name }
+                    if (c.expiresAt >= System.currentTimeMillis()) list.add(c)
+                }
+            }
+        }
+        override fun loadForRequest(url: HttpUrl): List<Cookie> = synchronized(store) {
+            store[url.host].orEmpty().filter { it.matches(url) && it.expiresAt >= System.currentTimeMillis() }
+        }
+        fun clear() = synchronized(store) { store.clear() }
+    }
+
+    private val client = OkHttpClient.Builder()
+        .cookieJar(cookieJar)
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(20, TimeUnit.SECONDS)
+        .callTimeout(25, TimeUnit.SECONDS)
+        .followRedirects(false)
+        .build()
+
+    fun clearSession() = cookieJar.clear()
+
+    fun normalize(input: String): String {
+        var s = input.trim().trimEnd('/')
+        if (!s.startsWith("http://") && !s.startsWith("https://")) s = "http://$s"
+        return s
+    }
+
+    private fun url(path: String): String {
+        val b = baseUrl.trimEnd('/')
+        return if (path.startsWith("http")) path else b + (if (path.startsWith("/")) path else "/$path")
+    }
+
+    /** 解析 {code,msg,data} 结构；非 200 抛业务异常 */
+    private fun parse(text: String, httpCode: Int): JSONObject {
+        val json = try { JSONObject(text) } catch (e: Exception) {
+            throw ApiException("服务器返回非 JSON（HTTP $httpCode）。请检查地址是否为 ACG-Faka 站点。")
+        }
+        val code = json.optInt("code", 200)
+        if (httpCode == 301 || httpCode == 302 || httpCode == 303) throw ApiException("会话失效或发生跳转，请重新登录")
+        if (code != 200) throw ApiException(json.optString("msg", "请求失败（$code）"))
+        return json
+    }
+
+    fun getSync(path: String, params: Map<String, String> = emptyMap()): JSONObject {
+        val b = StringBuilder(url(path))
+        if (params.isNotEmpty()) {
+            b.append(if (b.contains("?")) "&" else "?")
+            b.append(params.entries.joinToString("&") { "${it.key}=${java.net.URLEncoder.encode(it.value, "UTF-8")}" })
+        }
+        val req = Request.Builder().url(b.toString()).header("Accept", "application/json").get().build()
+        client.newCall(req).execute().use { resp -> return parse(resp.body?.string().orEmpty(), resp.code) }
+    }
+
+    fun postSync(path: String, params: Map<String, String> = emptyMap()): JSONObject {
+        val fb = FormBody.Builder()
+        params.forEach { (k, v) -> fb.add(k, v) }
+        val req = Request.Builder().url(url(path)).header("Accept", "application/json").post(fb.build()).build()
+        client.newCall(req).execute().use { resp -> return parse(resp.body?.string().orEmpty(), resp.code) }
+    }
+
+    fun getBytesSync(path: String): ByteArray {
+        val req = Request.Builder().url(url(path)).header("Accept", "image/*").get().build()
+        client.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) throw ApiException("HTTP ${resp.code}")
+            return resp.body?.bytes() ?: throw ApiException("空响应")
+        }
+    }
+}
+
+class ApiException(message: String) : Exception(message)
