@@ -3,9 +3,12 @@ package cn.xiaobai.acgfaka.user
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -39,9 +42,9 @@ private fun AppRoot() {
     val backStack by nav.currentBackStackEntryAsState()
     val current = backStack?.destination?.route
 
+    // 启动即用固定默认地址，用户无需手填
     LaunchedEffect(Unit) {
-        val saved = Session.server(ctx)
-        if (saved.isNotBlank()) Http.baseUrl = saved
+        Http.baseUrl = Session.server(ctx)
     }
 
     val tabs = listOf(
