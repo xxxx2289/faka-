@@ -15,18 +15,72 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import cn.xiaobai.acgfaka.user.core.DashboardApi
 import cn.xiaobai.acgfaka.user.core.Http
+import cn.xiaobai.acgfaka.user.core.Json
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+
+/** 套餐项 */
+data class ShopLevel(
+    val id: Int,
+    val name: String,
+    val price: Double,
+    val topDomain: Boolean,
+    val supplier: Boolean
+)
+
+/** 店铺信息 */
+data class MyShop(
+    val hasShop: Boolean,
+    val shopName: String,
+    val subdomain: String,
+    val levelName: String
+)
+
+/** 套餐列表 + 当前等级 */
+data class ShopLevelsState(val list: List<ShopLevel>, val currentLevel: Int)
+
+private fun fetchLevels(): ShopLevelsState {
+    val d = Http.postSync("/user/api/dashboard/levels").optJSONObject("data") ?: JSONObject()
+    val arr = d.optJSONArray("list") ?: JSONArray()
+    val list = (0 until arr.length()).mapNotNull { i ->
+        val o = arr.optJSONObject(i) ?: return@mapNotNull null
+        ShopLevel(
+            id = Json.int(o, "id"),
+            name = Json.str(o, "name"),
+            price = Json.dbl(o, "price"),
+            topDomain = Json.int(o, "top_domain") == 1,
+            supplier = Json.int(o, "supplier") == 1
+        )
+    }
+    return ShopLevelsState(list, Json.int(d, "current_level"))
+}
+
+private fun fetchShop(): MyShop {
+    val d = Http.postSync("/user/api/dashboard/shop").optJSONObject("data") ?: JSONObject()
+    val lv = d.optJSONObject("level")
+    val hasShop = Json.int(d, "has_shop") == 1 || (d.has("has_shop") && d.optBoolean("has_shop", false))
+    return MyShop(
+        hasShop = hasShop,
+        shopName = Json.str(d, "shop_name"),
+        subdomain = Json.str(d, "subdomain"),
+        levelName = if (lv != null) Json.str(lv, "name") else ""
+    )
+}
+
+private fun purchaseLevel(levelId: Int): String {
+    return Http.postSync("/user/api/business/purchase", mapOf("levelId" to levelId.toString())).optString("msg", "开通成功")
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ShopScreen(nav: NavController) {
     val scope = rememberCoroutineScope()
-    var levels by remember { mutableStateOf<DashboardApi.LevelsResult?>(null) }
-    var shop by remember { mutableStateOf<DashboardApi.ShopInfo?>(null) }
+    var levelsState by remember { mutableStateOf<ShopLevelsState?>(null) }
+    var shop by remember { mutableStateOf<MyShop?>(null) }
     var selected by remember { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -38,9 +92,10 @@ fun ShopScreen(nav: NavController) {
             loading = true; error = null
             try {
                 if (Http.baseUrl.isBlank()) { error = "请先配置服务器地址"; loading = false; return@launch }
-                levels = withContext(Dispatchers.IO) { DashboardApi.levels() }
-                shop = withContext(Dispatchers.IO) { runCatching { DashboardApi.shop() }.getOrNull() }
-                selected = levels?.currentLevel ?: 0
+                val lv = withContext(Dispatchers.IO) { fetchLevels() }
+                levelsState = lv
+                shop = withContext(Dispatchers.IO) { runCatching { fetchShop() }.getOrNull() }
+                selected = lv.currentLevel
             } catch (e: Exception) { error = e.message } finally { loading = false }
         }
     }
@@ -57,10 +112,12 @@ fun ShopScreen(nav: NavController) {
         }
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(14.dp)) {
-            if (loading) { CircularProgressIndicator(); return@Column }
+            if (loading) {
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                return@Column
+            }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
 
-            // 当前店铺状态
             val s = shop
             if (s != null && s.hasShop) {
                 Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
@@ -82,9 +139,9 @@ fun ShopScreen(nav: NavController) {
             Text("选择套餐，一次性开通，永久有效", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(10.dp))
 
-            val lv = levels
+            val lv = levelsState
             if (lv != null) {
-                lv.list.forEach { item ->
+                for (item in lv.list) {
                     val isCurrent = item.id == lv.currentLevel
                     val isSelected = item.id == selected
                     Card(
@@ -103,8 +160,8 @@ fun ShopScreen(nav: NavController) {
                             Text("¥${fmt(item.price)}", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
                             Spacer(Modifier.height(8.dp))
                             FeatureRow("分站功能", true)
-                            FeatureRow("独立域名", item.topDomain == 1)
-                            FeatureRow("供货权限", item.supplier == 1)
+                            FeatureRow("独立域名", item.topDomain)
+                            FeatureRow("供货权限", item.supplier)
                         }
                     }
                 }
@@ -119,7 +176,7 @@ fun ShopScreen(nav: NavController) {
                         scope.launch {
                             buying = true; msg = null
                             try {
-                                val m = withContext(Dispatchers.IO) { DashboardApi.purchaseLevel(selected) }
+                                val m = withContext(Dispatchers.IO) { purchaseLevel(selected) }
                                 msg = m
                                 load()
                             } catch (e: Exception) { msg = e.message ?: "开通失败" } finally { buying = false }

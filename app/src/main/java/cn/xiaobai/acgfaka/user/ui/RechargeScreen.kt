@@ -16,7 +16,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import cn.xiaobai.acgfaka.user.core.Api
-import cn.xiaobai.acgfaka.user.core.DashboardApi
 import cn.xiaobai.acgfaka.user.core.Http
 import cn.xiaobai.acgfaka.user.core.PayMethod
 import kotlinx.coroutines.Dispatchers
@@ -34,14 +33,14 @@ fun RechargeScreen(nav: NavController) {
     var isError by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
-    var overview by remember { mutableStateOf<DashboardApi.Overview?>(null) }
+    var overview by remember { mutableStateOf<DashOverview?>(null) }
 
     LaunchedEffect(Unit) {
         scope.launch {
             loading = true
             pays = withContext(Dispatchers.IO) { runCatching { Api.rechargePayMethods() }.getOrDefault(emptyList()) }
             payId = pays.firstOrNull()?.id ?: 0
-            overview = withContext(Dispatchers.IO) { runCatching { DashboardApi.overview() }.getOrNull() }
+            overview = withContext(Dispatchers.IO) { runCatching { fetchOverview() }.getOrNull() }
             loading = false
         }
     }
@@ -58,9 +57,11 @@ fun RechargeScreen(nav: NavController) {
             Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            if (loading) { CircularProgressIndicator(); return@Column }
+            if (loading) {
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                return@Column
+            }
 
-            // 余额 + 元气等级成长
             overview?.let { o ->
                 Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp)) {
@@ -70,7 +71,6 @@ fun RechargeScreen(nav: NavController) {
                         Text("充值成功后余额即时更新，可用于购买商品", style = MaterialTheme.typography.labelSmall)
                     }
                 }
-                // 会员成长
                 if (o.level.name.isNotBlank()) {
                     Card(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(14.dp)) {
@@ -102,8 +102,6 @@ fun RechargeScreen(nav: NavController) {
                 label = { Text("金额") }, singleLine = true,
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal)
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            // 快捷金额两行
             listOf(listOf("10", "50", "100"), listOf("200", "500", "1000")).forEach { rowVals ->
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     rowVals.forEach { v ->

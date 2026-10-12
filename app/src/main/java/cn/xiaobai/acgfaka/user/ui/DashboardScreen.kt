@@ -13,17 +13,69 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import cn.xiaobai.acgfaka.user.core.DashboardApi
 import cn.xiaobai.acgfaka.user.core.Http
+import cn.xiaobai.acgfaka.user.core.Json
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
+
+/** 资产 */
+data class DashAsset(val balance: Double, val coin: Double, val integral: Int, val recharge: Double, val totalCoin: Double)
+
+/** 消费 */
+data class DashConsume(val buyMonth: Double, val buyTotal: Double, val buyCount: Int)
+
+/** 等级 */
+data class DashLevel(val name: String, val recharge: Double, val nextName: String, val nextRecharge: Double)
+
+/** 经营数据 */
+data class DashBusiness(
+    val todayIncome: Double, val yesterdayIncome: Double, val weekIncome: Double, val monthIncome: Double,
+    val tradeTotal: Double, val todayOrders: Int, val pendingDelivery: Int,
+    val cardUnsold: Int, val commodityOnline: Int, val commodityCount: Int
+)
+
+/** 看板总览 */
+data class DashOverview(
+    val username: String, val avatar: String,
+    val asset: DashAsset, val consume: DashConsume, val level: DashLevel,
+    val isBusiness: Boolean, val business: DashBusiness?
+)
+
+fun fetchOverview(): DashOverview {
+    val d = Http.postSync("/user/api/dashboard/index").optJSONObject("data") ?: JSONObject()
+    val a = d.optJSONObject("asset") ?: JSONObject()
+    val c = d.optJSONObject("consume") ?: JSONObject()
+    val l = d.optJSONObject("level") ?: JSONObject()
+    val asset = DashAsset(
+        Json.dbl(a, "balance"), Json.dbl(a, "coin"), Json.int(a, "integral"),
+        Json.dbl(a, "recharge"), Json.dbl(a, "total_coin")
+    )
+    val consume = DashConsume(Json.dbl(c, "buy_month"), Json.dbl(c, "buy_total"), Json.int(c, "buy_count"))
+    val level = DashLevel(
+        Json.str(l, "name"), Json.dbl(l, "recharge"),
+        Json.str(l, "next_name"), Json.dbl(l, "next_recharge")
+    )
+    val bizObj = d.optJSONObject("business")
+    val business: DashBusiness? = if (bizObj != null) {
+        DashBusiness(
+            Json.dbl(bizObj, "today_income"), Json.dbl(bizObj, "yesterday_income"),
+            Json.dbl(bizObj, "week_income"), Json.dbl(bizObj, "month_income"),
+            Json.dbl(bizObj, "trade_total"), Json.int(bizObj, "today_orders"),
+            Json.int(bizObj, "pending_delivery"), Json.int(bizObj, "card_unsold"),
+            Json.int(bizObj, "commodity_online"), Json.int(bizObj, "commodity_count")
+        )
+    } else null
+    val isBiz = Json.int(d, "is_business") == 1 || (d.has("is_business") && d.optBoolean("is_business", false))
+    return DashOverview(Json.str(d, "username"), Json.str(d, "avatar"), asset, consume, level, isBiz, business)
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(nav: NavController) {
     val scope = rememberCoroutineScope()
-    var data by remember { mutableStateOf<DashboardApi.Overview?>(null) }
+    var data by remember { mutableStateOf<DashOverview?>(null) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -32,7 +84,7 @@ fun DashboardScreen(nav: NavController) {
             loading = true; error = null
             try {
                 if (Http.baseUrl.isBlank()) { error = "请先配置服务器地址"; loading = false; return@launch }
-                data = withContext(Dispatchers.IO) { DashboardApi.overview() }
+                data = withContext(Dispatchers.IO) { fetchOverview() }
             } catch (e: Exception) { error = e.message } finally { loading = false }
         }
     }
@@ -49,11 +101,13 @@ fun DashboardScreen(nav: NavController) {
         }
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
-            if (loading) { CircularProgressIndicator(); return@Column }
+            if (loading) {
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                return@Column
+            }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(8.dp)) }
             val d = data ?: return@Column
 
-            // 用户信息
             Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Text(d.username.ifBlank { "用户" }, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -64,7 +118,6 @@ fun DashboardScreen(nav: NavController) {
                 }
             }
 
-            // 资产数据
             SectionHeader("资产数据")
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 StatBox("余额", "¥${fmt(d.asset.balance)}", Modifier.weight(1f))
@@ -76,7 +129,6 @@ fun DashboardScreen(nav: NavController) {
                 StatBox("总硬币收入", "¥${fmt(d.asset.totalCoin)}", Modifier.weight(1f))
             }
 
-            // 会员成长
             if (d.level.nextName.isNotBlank() && d.level.nextRecharge > 0) {
                 SectionHeader("会员成长")
                 val cur = d.asset.recharge
@@ -93,7 +145,6 @@ fun DashboardScreen(nav: NavController) {
                 }
             }
 
-            // 消费数据
             SectionHeader("消费数据")
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 StatBox("本月购物", "¥${fmt(d.consume.buyMonth)}", Modifier.weight(1f))
@@ -105,7 +156,6 @@ fun DashboardScreen(nav: NavController) {
                 Spacer(Modifier.weight(1f))
             }
 
-            // 经营数据（商家）
             val b = d.business
             if (b != null) {
                 SectionHeader("经营数据")
@@ -136,10 +186,7 @@ fun DashboardScreen(nav: NavController) {
 
 @Composable
 private fun SectionHeader(title: String) {
-    Text(
-        title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
-    )
+    Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
 }
 
 @Composable
