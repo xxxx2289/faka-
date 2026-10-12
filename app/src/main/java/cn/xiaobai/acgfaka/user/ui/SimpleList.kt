@@ -15,6 +15,9 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import cn.xiaobai.acgfaka.user.core.Api
 import cn.xiaobai.acgfaka.user.core.Http
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 /**
@@ -43,7 +46,7 @@ fun SimpleListScreen(
             loading = true; error = null
             try {
                 if (Http.baseUrl.isBlank()) { error = "请先配置服务器地址"; loading = false; return@launch }
-                val res = withContext(kotlinx.coroutines.Dispatchers.IO) { loader(p, pageSize) }
+                val res = withContext(Dispatchers.IO) { loader(p, pageSize) }
                 list = res.list; total = res.total; page = p
             } catch (e: Exception) { error = e.message } finally { loading = false }
         }
