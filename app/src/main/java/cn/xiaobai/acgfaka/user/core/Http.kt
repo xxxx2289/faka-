@@ -4,16 +4,18 @@ import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.FormBody
 import okhttp3.HttpUrl
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 /**
  * 全局 HTTP 层。会话用内存 CookieJar 维持 ACG-SHOP 会话。
  * 测试环境走内网 IP + http，允许明文；生产建议切 https。
+ *
+ * 关键：服务端 UserSession 拦截器会校验 Referer 的 host 必须与站点一致，
+ * 否则报「当前页面会话失效」。浏览器会自动带 Referer，App 不会，
+ * 所以这里给所有请求手动补上 Referer = 站点地址。
  */
 object Http {
     @Volatile var baseUrl: String = ""
@@ -56,13 +58,15 @@ object Http {
         return if (path.startsWith("http")) path else b + (if (path.startsWith("/")) path else "/$path")
     }
 
-    /** 解析 {code,msg,data} 结构；非 200 抛业务异常 */
+    /** Referer 必须带 scheme，parse_url 才解析得出 host。用站点根地址即可。 */
+    private fun referer(): String = baseUrl.trimEnd('/') + "/"
+
     private fun parse(text: String, httpCode: Int): JSONObject {
         val json = try { JSONObject(text) } catch (e: Exception) {
             throw ApiException("服务器返回非 JSON（HTTP $httpCode）。请检查地址是否为 ACG-Faka 站点。")
         }
-        val code = json.optInt("code", 200)
         if (httpCode == 301 || httpCode == 302 || httpCode == 303) throw ApiException("会话失效或发生跳转，请重新登录")
+        val code = json.optInt("code", 200)
         if (code != 200) throw ApiException(json.optString("msg", "请求失败（$code）"))
         return json
     }
@@ -73,22 +77,33 @@ object Http {
             b.append(if (b.contains("?")) "&" else "?")
             b.append(params.entries.joinToString("&") { "${it.key}=${java.net.URLEncoder.encode(it.value, "UTF-8")}" })
         }
-        val req = Request.Builder().url(b.toString()).header("Accept", "application/json").get().build()
-        client.newCall(req).execute().use { resp -> return parse(resp.body?.string().orEmpty(), resp.code) }
+        val req = Request.Builder().url(b.toString())
+            .header("Accept", "application/json")
+            .header("Referer", referer())
+            .header("X-Requested-With", "XMLHttpRequest")
+            .get().build()
+        client.newCall(req).execute().use { return parse(it.body?.string().orEmpty(), it.code) }
     }
 
     fun postSync(path: String, params: Map<String, String> = emptyMap()): JSONObject {
         val fb = FormBody.Builder()
         params.forEach { (k, v) -> fb.add(k, v) }
-        val req = Request.Builder().url(url(path)).header("Accept", "application/json").post(fb.build()).build()
-        client.newCall(req).execute().use { resp -> return parse(resp.body?.string().orEmpty(), resp.code) }
+        val req = Request.Builder().url(url(path))
+            .header("Accept", "application/json")
+            .header("Referer", referer())
+            .header("X-Requested-With", "XMLHttpRequest")
+            .post(fb.build()).build()
+        client.newCall(req).execute().use { return parse(it.body?.string().orEmpty(), it.code) }
     }
 
     fun getBytesSync(path: String): ByteArray {
-        val req = Request.Builder().url(url(path)).header("Accept", "image/*").get().build()
-        client.newCall(req).execute().use { resp ->
-            if (!resp.isSuccessful) throw ApiException("HTTP ${resp.code}")
-            return resp.body?.bytes() ?: throw ApiException("空响应")
+        val req = Request.Builder().url(url(path))
+            .header("Accept", "image/*")
+            .header("Referer", referer())
+            .get().build()
+        client.newCall(req).execute().use {
+            if (!it.isSuccessful) throw ApiException("HTTP ${it.code}")
+            return it.body?.bytes() ?: throw ApiException("空响应")
         }
     }
 }
