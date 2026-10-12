@@ -42,7 +42,6 @@ private fun AppRoot() {
     val backStack by nav.currentBackStackEntryAsState()
     val current = backStack?.destination?.route
 
-    // 启动即用固定默认地址，用户无需手填
     LaunchedEffect(Unit) {
         Http.baseUrl = Session.server(ctx)
     }
@@ -78,16 +77,40 @@ private fun AppRoot() {
         }
     ) { padding ->
         NavHost(nav, startDestination = "home", modifier = Modifier.padding(padding)) {
+            // 主 Tab
             composable("home") { HomeScreen(nav) }
             composable("category") { CategoryScreen(nav) }
             composable("orders") { OrdersScreen(nav) }
             composable("mine") { MineScreen(nav) }
+            // 商品与账户
             composable("detail/{id}") { entry ->
                 val id = entry.arguments?.getString("id")?.toIntOrNull() ?: 0
                 DetailScreen(nav, id)
             }
             composable("login") { LoginScreen(nav) }
             composable("server") { ServerScreen(nav) }
+            // 店铺
+            composable("purchase") { PurchaseScreen(nav) }
+            composable("coupons") { CouponsScreen(nav) }
+            // 财务
+            composable("recharge") { RechargeScreen(nav) }
+            composable("cash") { CashScreen(nav) }
+            composable("cashrecords") { CashRecordsScreen(nav) }
+            composable("bills") { BillsScreen(nav) }
+            // 推广
+            composable("promote") { PromoteScreen(nav) }
+            composable("agentmembers") { AgentMembersScreen(nav) }
+            // 客服与消息
+            composable("tickets") { TicketsScreen(nav) }
+            composable("ticketdetail/{id}") { entry ->
+                val id = entry.arguments?.getString("id")?.toIntOrNull() ?: 0
+                TicketDetailScreen(nav, id)
+            }
+            composable("messages") { MessagesScreen(nav) }
+            // 账户安全
+            composable("profile") { ProfileScreen(nav) }
+            composable("password") { PasswordScreen(nav) }
+            composable("security") { SecurityScreen(nav) }
         }
     }
 }
