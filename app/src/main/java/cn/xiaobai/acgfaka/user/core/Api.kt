@@ -51,7 +51,6 @@ object Api {
         return if (arr is JSONArray) (0 until arr.length()).mapNotNull { arr.optJSONObject(it)?.let { o -> Json.toPay(o) } } else emptyList()
     }
 
-    /** 下单前估价 */
     fun valuation(itemId: Int, num: Int, race: String = "", sku: Map<String, String> = emptyMap(), cardId: Int = 0, coupon: String = ""): Double {
         val params = mutableMapOf(
             "item_id" to itemId.toString(),
@@ -74,7 +73,6 @@ object Api {
         return StockInfo(Json.int(d, "stock"), Json.int(d, "stock_state"))
     }
 
-    /** 预选卡密列表（draft_status=1 的商品可用） */
     data class DraftCard(val id: Int, val draft: String, val premium: Double)
     data class DraftPage(val list: List<DraftCard>, val total: Int)
 
@@ -96,9 +94,9 @@ object Api {
 
     // ---------- 账户 ----------
 
-    /** 登录，成功返回提示语；可能抛错（含需要 TOTP 的情况用 code 42001） */
     class NeedTotpException(message: String) : Exception(message)
 
+    /** 登录：验证码 action 必须是 login */
     fun login(username: String, password: String, captcha: String, code: String = "", remember: Boolean = true): String {
         val params = mutableMapOf(
             "username" to username.trim(),
@@ -111,32 +109,59 @@ object Api {
             val json = Http.postSync("/user/api/authentication/login", params)
             return json.optString("msg", "登录成功")
         } catch (e: ApiException) {
-            // 需要谷歌验证码时服务端返回 42001，Http 已转成异常，这里按消息识别
-            if (e.message?.contains("两步") == true || e.message?.contains("验证码") == true && e.message?.contains("谷歌") == true) {
-                throw NeedTotpException(e.message ?: "请输入谷歌验证码")
-            }
+            val m = e.message ?: ""
+            if (m.contains("谷歌") || m.contains("两步")) throw NeedTotpException(m)
             throw e
         }
     }
 
-    fun register(username: String, password: String, email: String = "", captcha: String = ""): String {
+    /** 登录图形验证码：action=login */
+    fun loginCaptcha(): ByteArray =
+        Http.getBytesSync("/user/captcha/image?action=login&t=${System.currentTimeMillis()}")
+
+    /** 注册图形验证码：action=register */
+    fun registerCaptcha(): ByteArray =
+        Http.getBytesSync("/user/captcha/image?action=register&t=${System.currentTimeMillis()}")
+
+    /** 发送邮箱注册验证码 */
+    fun sendEmailRegisterCaptcha(email: String): String {
+        return Http.postSync("/user/api/authentication/emailRegisterCaptcha", mapOf("email" to email.trim())).optString("msg", "发送成功")
+    }
+
+    /** 发送手机注册验证码 */
+    fun sendPhoneRegisterCaptcha(phone: String): String {
+        return Http.postSync("/user/api/authentication/phoneRegisterCaptcha", mapOf("phone" to phone.trim())).optString("msg", "发送成功")
+    }
+
+    /**
+     * 注册。registered_type: 0=仅用户名 1=手机 2=邮箱。
+     * 验证码 action=register。
+     */
+    fun register(
+        username: String,
+        password: String,
+        captcha: String,
+        email: String = "",
+        emailCaptcha: String = "",
+        phone: String = "",
+        phoneCaptcha: String = ""
+    ): String {
         val params = mutableMapOf(
             "username" to username.trim(),
             "password" to password,
-            "email" to email.trim(),
             "captcha" to captcha.trim()
         )
+        if (email.isNotBlank()) params["email"] = email.trim()
+        if (emailCaptcha.isNotBlank()) params["email_captcha"] = emailCaptcha.trim()
+        if (phone.isNotBlank()) params["phone"] = phone.trim()
+        if (phoneCaptcha.isNotBlank()) params["phone_captcha"] = phoneCaptcha.trim()
         return Http.postSync("/user/api/authentication/register", params).optString("msg", "注册成功")
     }
-
-    /** 用户登录验证码图片 */
-    fun loginCaptcha(): ByteArray = Http.getBytesSync("/user/captcha/image?action=userLogin&t=${System.currentTimeMillis()}")
 
     // ---------- 下单 ----------
 
     data class TradeResult(val tradeNo: String, val amount: Double, val payUrl: String?, val payHtml: String?)
 
-    /** 创建订单：item_id, num, pay_id, 可选 race/sku/card_id/coupon/contact/password */
     fun trade(
         itemId: Int,
         num: Int,
@@ -168,7 +193,6 @@ object Api {
         )
     }
 
-    /** 轮询订单状态，用于「对局中」式实时刷新 */
     fun orderState(tradeNo: String): OrderInfo {
         val d = Http.postSync("/user/api/order/state", mapOf("tradeNo" to tradeNo)).optJSONObject("data") ?: JSONObject()
         return Json.toOrder(d)
