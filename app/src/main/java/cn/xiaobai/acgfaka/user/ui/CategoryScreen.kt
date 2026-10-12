@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Category
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -67,8 +66,6 @@ fun CategoryScreen(nav: NavController) {
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Category, null, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(6.dp))
                                 Text(c.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
                             }
                         }

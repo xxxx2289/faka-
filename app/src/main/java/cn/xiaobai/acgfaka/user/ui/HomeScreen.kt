@@ -40,7 +40,7 @@ fun HomeScreen(nav: NavController) {
             loading = true; error = null
             try {
                 if (Http.baseUrl.isBlank()) { error = "请先在「我的」里配置服务器地址"; loading = false; return@launch }
-                val res = withContext(Dispatchers.IO) { Api.commodities(keyword = search, categoryId = "0", page = p, limit = 20) }
+                val res = withContext(Dispatchers.IO) { Api.commodities(keywords = search, categoryId = "0", page = p, limit = 20) }
                 list = if (append) list + res.list else res.list
                 total = res.total; page = p
             } catch (e: Exception) {

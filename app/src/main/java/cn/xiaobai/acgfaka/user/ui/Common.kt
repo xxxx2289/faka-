@@ -1,9 +1,10 @@
 package cn.xiaobai.acgfaka.user.ui
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -31,7 +32,7 @@ fun RemoteImage(url: String?, modifier: Modifier = Modifier, fallbackIcon: Boole
     val full = fullImage(url)
     if (full == null) {
         Box(modifier.background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
-            Icon(androidx.compose.material.icons.Icons.Default.Image, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(Icons.Default.Image, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     } else {
         AsyncImage(
