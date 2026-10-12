@@ -1,5 +1,8 @@
 package cn.xiaobai.acgfaka.user.ui
 
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -15,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -27,7 +31,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** 下单「对局」阶段，模拟游戏对局的实时状态机 */
 enum class TradePhase { IDLE, PAYING, DELIVERING, DONE, FAILED }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -47,6 +50,16 @@ fun DetailScreen(nav: NavController, id: Int) {
     var secret by remember { mutableStateOf<String?>(null) }
     var failMsg by remember { mutableStateOf<String?>(null) }
     var showPaySheet by remember { mutableStateOf(false) }
+    var captcha by remember { mutableStateOf("") }
+    var captchaBytes by remember { mutableStateOf<ByteArray?>(null) }
+
+    fun loadTradeCaptcha() {
+        scope.launch {
+            runCatching { withContext(Dispatchers.IO) { Api.tradeCaptcha() } }
+                .onSuccess { captchaBytes = it }
+                .onFailure { captchaBytes = null }
+        }
+    }
 
     LaunchedEffect(id) {
         scope.launch {
@@ -72,9 +85,7 @@ fun DetailScreen(nav: NavController, id: Int) {
         if (phase == TradePhase.DELIVERING && tradeNo.isNotBlank()) {
             repeat(40) {
                 delay(3000)
-                val ok = runCatching {
-                    withContext(Dispatchers.IO) { Api.orderState(tradeNo) }
-                }.getOrNull()
+                val ok = runCatching { withContext(Dispatchers.IO) { Api.orderState(tradeNo) } }.getOrNull()
                 if (ok != null && ok.status == 1) {
                     val s = runCatching { withContext(Dispatchers.IO) { Api.orderSecret(tradeNo) } }.getOrNull()
                     secret = s?.secret
@@ -103,7 +114,7 @@ fun DetailScreen(nav: NavController, id: Int) {
                         }
                         Button(
                             enabled = payId != 0 && detail!!.stockState != 2,
-                            onClick = { showPaySheet = true },
+                            onClick = { showPaySheet = true; captcha = ""; loadTradeCaptcha() },
                             modifier = Modifier.height(48.dp)
                         ) { Icon(Icons.Default.Payments, null); Spacer(Modifier.width(6.dp)); Text(if (detail!!.stockState == 2) "已售罄" else "立即购买") }
                     }
@@ -138,10 +149,7 @@ fun DetailScreen(nav: NavController, id: Int) {
                             Divider()
                             Text("商品说明", fontWeight = FontWeight.SemiBold)
                             val cleanDesc = HtmlText.clean(d.description)
-                            Text(
-                                cleanDesc.ifBlank { "暂无说明" },
-                                style = MaterialTheme.typography.bodyMedium
-                            )
+                            Text(cleanDesc.ifBlank { "暂无说明" }, style = MaterialTheme.typography.bodyMedium)
                         }
                     }
                 }
@@ -163,23 +171,40 @@ fun DetailScreen(nav: NavController, id: Int) {
                 Text("选择支付方式", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 if (pays.isEmpty()) Text("未配置支付方式", color = MaterialTheme.colorScheme.error)
                 pays.forEach { p ->
-                    Row(
-                        Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                         RadioButton(selected = payId == p.id, onClick = { payId = p.id })
                         RemoteImage(p.icon, modifier = Modifier.size(28.dp).clip(RoundedCornerShape(4.dp)))
                         Spacer(Modifier.width(10.dp))
                         Text(p.name, Modifier.weight(1f))
                     }
                 }
+                Divider()
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = captcha, onValueChange = { captcha = it },
+                        modifier = Modifier.weight(1f),
+                        label = { Text("验证码") }, singleLine = true,
+                        placeholder = { Text("未开启可留空") }
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    val bmp = remember(captchaBytes) { captchaBytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() } }
+                    if (bmp != null) {
+                        Image(
+                            bitmap = bmp, contentDescription = "验证码",
+                            modifier = Modifier.height(48.dp).width(120.dp).clickable { loadTradeCaptcha() }
+                        )
+                    } else {
+                        OutlinedButton(onClick = { loadTradeCaptcha() }) { Text("获取验证码") }
+                    }
+                }
+                Text("提示：未开启下单验证码的站点可直接留空。", style = MaterialTheme.typography.labelSmall)
                 Button(
                     onClick = {
                         showPaySheet = false
                         scope.launch {
                             phase = TradePhase.PAYING
                             try {
-                                val r = withContext(Dispatchers.IO) { Api.trade(detail!!.id, num, payId) }
+                                val r = withContext(Dispatchers.IO) { Api.trade(detail!!.id, num, payId, captcha = captcha) }
                                 tradeNo = r.tradeNo
                                 phase = TradePhase.DELIVERING
                             } catch (e: Exception) {
