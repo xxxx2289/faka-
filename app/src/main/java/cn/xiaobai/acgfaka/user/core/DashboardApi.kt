@@ -47,60 +47,62 @@ object DashboardApi {
             Json.str(l, "next_name"), Json.dbl(l, "next_recharge")
         )
         val bizObj = d.optJSONObject("business")
-        val business = bizObj?.let {
+        val business: Business? = if (bizObj != null) {
             Business(
-                Json.dbl(it, "today_income"), Json.dbl(it, "yesterday_income"),
-                Json.dbl(it, "week_income"), Json.dbl(it, "month_income"),
-                Json.dbl(it, "trade_total"), Json.int(it, "today_orders"),
-                Json.int(it, "pending_delivery"), Json.int(it, "card_unsold"),
-                Json.int(it, "commodity_online"), Json.int(it, "commodity_count")
+                Json.dbl(bizObj, "today_income"), Json.dbl(bizObj, "yesterday_income"),
+                Json.dbl(bizObj, "week_income"), Json.dbl(bizObj, "month_income"),
+                Json.dbl(bizObj, "trade_total"), Json.int(bizObj, "today_orders"),
+                Json.int(bizObj, "pending_delivery"), Json.int(bizObj, "card_unsold"),
+                Json.int(bizObj, "commodity_online"), Json.int(bizObj, "commodity_count")
             )
+        } else {
+            null
         }
+        val isBiz = Json.int(d, "is_business") == 1 || (d.has("is_business") && d.optBoolean("is_business", false))
         return Overview(
             Json.str(d, "username"), Json.str(d, "avatar"),
-            asset, consume, level,
-            Json.int(d, "is_business") == 1 || it_bool(d, "is_business"),
-            business
+            asset, consume, level, isBiz, business
         )
     }
 
-    private fun it_bool(o: JSONObject, k: String): Boolean =
-        if (o.has(k) && !o.isNull(k)) o.optBoolean(k, false) else false
+    data class LevelItem(
+        val id: Int, val name: String, val icon: String, val price: Double,
+        val substation: Int, val topDomain: Int, val supplier: Int, val cost: Double
+    )
 
-    data class LevelItem(val id: Int, val name: String, val icon: String, val price: Double,
-                         val substation: Int, val topDomain: Int, val supplier: Int, val cost: Double)
     data class LevelsResult(val list: List<LevelItem>, val currentLevel: Int)
 
     fun levels(): LevelsResult {
         val d = Http.postSync("/user/api/dashboard/levels").optJSONObject("data") ?: JSONObject()
         val arr = d.optJSONArray("list") ?: JSONArray()
         val list = (0 until arr.length()).mapNotNull { i ->
-            arr.optJSONObject(i)?.let { o ->
-                LevelItem(
-                    Json.int(o, "id"), Json.str(o, "name"), Json.str(o, "icon"),
-                    Json.dbl(o, "price"), Json.int(o, "substation"),
-                    Json.int(o, "top_domain"), Json.int(o, "supplier"), Json.dbl(o, "cost")
-                )
-            }
+            val o = arr.optJSONObject(i)
+            if (o == null) null else LevelItem(
+                Json.int(o, "id"), Json.str(o, "name"), Json.str(o, "icon"),
+                Json.dbl(o, "price"), Json.int(o, "substation"),
+                Json.int(o, "top_domain"), Json.int(o, "supplier"), Json.dbl(o, "cost")
+            )
         }
         return LevelsResult(list, Json.int(d, "current_level"))
     }
 
-    data class ShopInfo(val hasShop: Boolean, val shopName: String, val subdomain: String, val topdomain: String,
-                        val levelId: Int, val levelName: String)
+    data class ShopInfo(
+        val hasShop: Boolean, val shopName: String, val subdomain: String, val topdomain: String,
+        val levelId: Int, val levelName: String
+    )
 
     fun shop(): ShopInfo {
         val d = Http.postSync("/user/api/dashboard/shop").optJSONObject("data") ?: JSONObject()
         val lv = d.optJSONObject("level")
+        val hasShop = Json.int(d, "has_shop") == 1 || (d.has("has_shop") && d.optBoolean("has_shop", false))
+        val levelId = if (lv != null) Json.int(lv, "id") else 0
+        val levelName = if (lv != null) Json.str(lv, "name") else ""
         return ShopInfo(
-            Json.int(d, "has_shop") == 1 || (d.has("has_shop") && d.optBoolean("has_shop", false)),
-            Json.str(d, "shop_name"), Json.str(d, "subdomain"), Json.str(d, "topdomain"),
-            lv?.let { Json.int(it, "id") } ?: 0,
-            lv?.let { Json.str(it, "name") } ?: ""
+            hasShop, Json.str(d, "shop_name"), Json.str(d, "subdomain"), Json.str(d, "topdomain"),
+            levelId, levelName
         )
     }
 
-    /** 购买套餐 */
     fun purchaseLevel(levelId: Int): String {
         return Http.postSync("/user/api/business/purchase", mapOf("levelId" to levelId.toString())).optString("msg", "开通成功")
     }

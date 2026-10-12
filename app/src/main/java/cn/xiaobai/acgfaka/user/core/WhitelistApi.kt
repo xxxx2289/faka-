@@ -25,7 +25,6 @@ object WhitelistApi {
         )
     }
 
-    /** 添加 IP。开了两步验证传 code，没开传 password。 */
     fun add(ip: String, note: String = "", code: String = "", password: String = ""): String {
         val params = mutableMapOf("ip" to ip.trim())
         if (note.isNotBlank()) params["note"] = note
