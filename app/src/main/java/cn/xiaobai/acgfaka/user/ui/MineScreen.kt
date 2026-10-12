@@ -42,7 +42,7 @@ fun MineScreen(nav: NavController) {
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         TopAppBar(title = { Text("我的") })
-        // 用户信息卡
+
         Surface(color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.fillMaxWidth()) {
             Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.AccountCircle, null, modifier = Modifier.size(56.dp), tint = MaterialTheme.colorScheme.primary)
@@ -68,17 +68,41 @@ fun MineScreen(nav: NavController) {
             }
         }
 
+        if (!loggedIn) {
+            Surface(color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                Text("登录后可查看订单、账单、优惠券等全部功能", Modifier.padding(14.dp), style = MaterialTheme.typography.bodySmall)
+            }
+        }
+
         Spacer(Modifier.height(8.dp))
 
-        MineItem(Icons.Default.ReceiptLong, "购买记录") { nav.navigate("orders") }
-        MineItem(Icons.Default.AccountBalanceWallet, "我的账单") { }
-        MineItem(Icons.Default.ConfirmationNumber, "我的优惠券") { }
-        MineItem(Icons.Default.Mail, "站内消息") { }
-        MineItem(Icons.Default.SupportAgent, "工单支持") { }
+        SectionTitle("店铺")
+        MineItem(Icons.Default.Storefront, "购买商品") { nav.navigate("home") }
+        MineItem(Icons.Default.ReceiptLong, "购买记录") { nav.navigate("purchase") }
+        MineItem(Icons.Default.Search, "订单查询") { nav.navigate("orders") }
+        MineItem(Icons.Default.ConfirmationNumber, "我的优惠券") { nav.navigate("coupons") }
+
+        SectionTitle("财务")
+        MineItem(Icons.Default.AddCard, "充值中心") { nav.navigate("recharge") }
+        MineItem(Icons.Default.AccountBalanceWallet, "硬币兑现") { nav.navigate("cash") }
+        MineItem(Icons.Default.Receipt, "我的账单") { nav.navigate("bills") }
+
+        SectionTitle("推广")
+        MineItem(Icons.Default.Share, "推广中心") { nav.navigate("promote") }
+        MineItem(Icons.Default.People, "我的下级") { nav.navigate("agentmembers") }
+
+        SectionTitle("客服与消息")
+        MineItem(Icons.Default.SupportAgent, "我的工单") { nav.navigate("tickets") }
+        MineItem(Icons.Default.Mail, "消息中心") { nav.navigate("messages") }
+
+        SectionTitle("账户安全")
+        MineItem(Icons.Default.Person, "个人资料") { nav.navigate("profile") }
+        MineItem(Icons.Default.Lock, "修改密码") { nav.navigate("password") }
+        MineItem(Icons.Default.Security, "安全设置") { nav.navigate("security") }
         MineItem(Icons.Default.Settings, "服务器设置") { nav.navigate("server") }
 
         if (loggedIn) {
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(16.dp))
             Button(
                 onClick = {
                     Http.clearSession()
@@ -102,10 +126,20 @@ fun MineScreen(nav: NavController) {
 }
 
 @Composable
+private fun SectionTitle(title: String) {
+    Text(
+        title,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(start = 18.dp, top = 14.dp, bottom = 4.dp)
+    )
+}
+
+@Composable
 private fun MineItem(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, onClick: () -> Unit) {
     Surface(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(horizontal = 18.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, null, tint = MaterialTheme.colorScheme.primary)
+        Row(Modifier.padding(horizontal = 18.dp, vertical = 15.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
             Spacer(Modifier.width(16.dp))
             Text(title, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
             Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
