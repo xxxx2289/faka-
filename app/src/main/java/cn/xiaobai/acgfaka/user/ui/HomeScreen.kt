@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import cn.xiaobai.acgfaka.user.core.Api
 import cn.xiaobai.acgfaka.user.core.Commodity
+import cn.xiaobai.acgfaka.user.core.HtmlText
 import cn.xiaobai.acgfaka.user.core.Http
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -55,7 +56,7 @@ fun HomeScreen(nav: NavController) {
                 if (Http.baseUrl.isNotBlank()) {
                     val info = withContext(Dispatchers.IO) { Api.siteInfo() }
                     shopName = info.shopName.ifBlank { "异次元商城" }
-                    notice = info.notice
+                    notice = HtmlText.oneLine(info.notice)
                 }
             } catch (_: Exception) {}
             load(1, false)

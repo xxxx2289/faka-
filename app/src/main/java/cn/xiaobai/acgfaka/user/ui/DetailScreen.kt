@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import cn.xiaobai.acgfaka.user.core.Api
 import cn.xiaobai.acgfaka.user.core.CommodityDetail
+import cn.xiaobai.acgfaka.user.core.HtmlText
 import cn.xiaobai.acgfaka.user.core.PayMethod
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -47,7 +48,6 @@ fun DetailScreen(nav: NavController, id: Int) {
     var failMsg by remember { mutableStateOf<String?>(null) }
     var showPaySheet by remember { mutableStateOf(false) }
 
-    // 初始化：拉详情 + 支付方式 + 估价 + 库存
     LaunchedEffect(id) {
         scope.launch {
             loading = true; error = null
@@ -62,14 +62,12 @@ fun DetailScreen(nav: NavController, id: Int) {
         }
     }
 
-    // 数量变化时实时估价（游戏式即时反馈）
     LaunchedEffect(num, id) {
         if (!loading && detail != null) {
             runCatching { withContext(Dispatchers.IO) { Api.valuation(id, num) } }.onSuccess { price = it }
         }
     }
 
-    // 订单「对局中」轮询：支付完成即弹出卡密
     LaunchedEffect(phase, tradeNo) {
         if (phase == TradePhase.DELIVERING && tradeNo.isNotBlank()) {
             repeat(40) {
@@ -78,7 +76,6 @@ fun DetailScreen(nav: NavController, id: Int) {
                     withContext(Dispatchers.IO) { Api.orderState(tradeNo) }
                 }.getOrNull()
                 if (ok != null && ok.status == 1) {
-                    // 已支付，取卡密
                     val s = runCatching { withContext(Dispatchers.IO) { Api.orderSecret(tradeNo) } }.getOrNull()
                     secret = s?.secret
                     phase = TradePhase.DONE
@@ -140,8 +137,9 @@ fun DetailScreen(nav: NavController, id: Int) {
                             }
                             Divider()
                             Text("商品说明", fontWeight = FontWeight.SemiBold)
+                            val cleanDesc = HtmlText.clean(d.description)
                             Text(
-                                d.description.ifBlank { "暂无说明" }.replace(Regex("<[^>]+>"), ""),
+                                cleanDesc.ifBlank { "暂无说明" },
                                 style = MaterialTheme.typography.bodyMedium
                             )
                         }
@@ -149,7 +147,6 @@ fun DetailScreen(nav: NavController, id: Int) {
                 }
             }
 
-            // 对局式进度遮罩
             if (phase != TradePhase.IDLE) {
                 TradeOverlay(
                     phase = phase, secret = secret, failMsg = failMsg, tradeNo = tradeNo,
@@ -160,7 +157,6 @@ fun DetailScreen(nav: NavController, id: Int) {
         }
     }
 
-    // 支付方式选择
     if (showPaySheet && detail != null) {
         ModalBottomSheet(onDismissRequest = { showPaySheet = false }) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

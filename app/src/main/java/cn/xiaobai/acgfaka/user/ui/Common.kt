@@ -35,8 +35,14 @@ fun RemoteImage(url: String?, modifier: Modifier = Modifier, fallbackIcon: Boole
             Icon(Icons.Default.Image, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     } else {
+        // 内存 + 磁盘双层缓存：首次加载后落本地，二次进入不回服务器
         AsyncImage(
-            model = ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current).data(full).crossfade(true).build(),
+            model = ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                .data(full)
+                .crossfade(true)
+                .memoryCacheKey(full)
+                .diskCacheKey(full)
+                .build(),
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = modifier
