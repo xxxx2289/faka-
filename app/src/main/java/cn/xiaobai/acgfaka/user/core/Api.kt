@@ -3,10 +3,8 @@ package cn.xiaobai.acgfaka.user.core
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** ACG-Faka 前台接口封装。路径已按源码核对。 */
 object Api {
 
-    // ---------- 站点与首页 ----------
     data class SiteInfo(val shopName: String, val title: String, val notice: String?, val registeredState: Int)
 
     fun siteInfo(): SiteInfo {
@@ -85,7 +83,6 @@ object Api {
         return DraftPage(list, data.optInt("total", list.size))
     }
 
-    // ---------- 账户 ----------
     class NeedTotpException(message: String) : Exception(message)
 
     fun login(username: String, password: String, captcha: String, code: String = "", remember: Boolean = true): String {
@@ -105,7 +102,6 @@ object Api {
 
     fun loginCaptcha(): ByteArray = Http.getBytesSync("/user/captcha/image?action=login&t=${System.currentTimeMillis()}")
     fun registerCaptcha(): ByteArray = Http.getBytesSync("/user/captcha/image?action=register&t=${System.currentTimeMillis()}")
-    /** 下单验证码，仅当站点开启 trade_verification 时需要 */
     fun tradeCaptcha(): ByteArray = Http.getBytesSync("/user/captcha/image?action=trade&t=${System.currentTimeMillis()}")
 
     fun sendEmailRegisterCaptcha(email: String): String =
@@ -128,7 +124,6 @@ object Api {
         return Http.postSync("/user/api/authentication/register", params).optString("msg", "注册成功")
     }
 
-    // ---------- 下单 ----------
     data class TradeResult(val tradeNo: String, val amount: Double, val payUrl: String?, val payHtml: String?)
 
     fun trade(itemId: Int, num: Int, payId: Int, race: String = "", sku: Map<String, String> = emptyMap(), cardId: Int = 0, coupon: String = "", contact: String = "", password: String = "", captcha: String = ""): TradeResult {
@@ -153,7 +148,6 @@ object Api {
         return Json.toOrder(d)
     }
 
-    // ---------- 订单查询 ----------
     data class OrderQueryPage(val list: List<OrderInfo>, val total: Int)
 
     fun queryOrders(keywords: String, page: Int = 1, limit: Int = 10): OrderQueryPage {
@@ -177,7 +171,6 @@ object Api {
         )
     }
 
-    // ---------- 用户中心 ----------
     data class Page(val list: List<JSONObject>, val total: Int)
 
     fun personal(): JSONObject = Http.getSync("/user/api/security/personal").optJSONObject("data") ?: JSONObject()
@@ -220,7 +213,6 @@ object Api {
         return Page(list, data.optInt("total", list.size))
     }
 
-    // ---------- 账单 / 购买记录 ----------
     fun bills(page: Int = 1, limit: Int = 15): Page {
         val data = Http.postSync("/user/api/bill/data", mapOf("page" to page.toString(), "limit" to limit.toString())).optJSONObject("data") ?: JSONObject()
         val arr = data.optJSONArray("list") ?: JSONArray()
@@ -235,7 +227,6 @@ object Api {
         return Page(list, data.optInt("total", list.size))
     }
 
-    // ---------- 充值 ----------
     fun rechargePayMethods(): List<PayMethod> {
         val arr = Http.postSync("/user/api/recharge/pay").opt("data")
         return if (arr is JSONArray) (0 until arr.length()).mapNotNull { arr.optJSONObject(it)?.let { o -> Json.toPay(o) } } else emptyList()
@@ -252,7 +243,6 @@ object Api {
         )
     }
 
-    // ---------- 提现 ----------
     fun cashSubmit(type: Int, amount: Double): String {
         return Http.postSync("/user/api/cash/submit", mapOf("type" to type.toString(), "amount" to amount.toString())).optString("msg", "提现申请已提交")
     }
@@ -264,12 +254,10 @@ object Api {
         return Page(list, data.optInt("total", list.size))
     }
 
-    // ---------- 推广 ----------
     fun promoteData(page: Int = 1, limit: Int = 15): JSONObject {
         return Http.postSync("/user/api/promote/data", mapOf("page" to page.toString(), "limit" to limit.toString())).optJSONObject("data") ?: JSONObject()
     }
 
-    // ---------- 我的下级 ----------
     fun agentMembers(page: Int = 1, limit: Int = 15, keyword: String = ""): Page {
         val params = mutableMapOf("page" to page.toString(), "limit" to limit.toString())
         if (keyword.isNotBlank()) params["username"] = keyword
@@ -283,7 +271,6 @@ object Api {
         return Http.postSync("/user/api/agentMember/transfer", mapOf("id" to userId.toString(), "amount" to amount.toString())).optString("msg", "转账成功")
     }
 
-    // ---------- 优惠券 ----------
     fun coupons(page: Int = 1, limit: Int = 15): Page {
         val data = Http.postSync("/user/api/coupon/data", mapOf("page" to page.toString(), "limit" to limit.toString())).optJSONObject("data") ?: JSONObject()
         val arr = data.optJSONArray("list") ?: JSONArray()
@@ -291,7 +278,6 @@ object Api {
         return Page(list, data.optInt("total", list.size))
     }
 
-    // ---------- 工单 ----------
     fun tickets(page: Int = 1, limit: Int = 15): Page {
         val data = Http.postSync("/user/api/ticket/data", mapOf("page" to page.toString(), "limit" to limit.toString())).optJSONObject("data") ?: JSONObject()
         val arr = data.optJSONArray("list") ?: JSONArray()
@@ -313,7 +299,6 @@ object Api {
     fun ticketReply(id: Int, content: String): String =
         Http.postSync("/user/api/ticket/reply", mapOf("id" to id.toString(), "content" to content)).optString("msg", "已回复")
 
-    // ---------- 消息 ----------
     fun messages(page: Int = 1, limit: Int = 15): Page {
         val data = Http.postSync("/user/api/message/data", mapOf("page" to page.toString(), "limit" to limit.toString())).optJSONObject("data") ?: JSONObject()
         val arr = data.optJSONArray("list") ?: JSONArray()
@@ -322,4 +307,144 @@ object Api {
     }
     fun messageDetail(id: Int): JSONObject = Http.postSync("/user/api/message/detail", mapOf("id" to id.toString())).optJSONObject("data") ?: JSONObject()
     fun messageClear(): String = Http.postSync("/user/api/message/clear").optString("msg", "已清空")
+}
+
+/** 看板接口，对应服务端 /user/api/dashboard/*（需部署 Dashboard.php） */
+object DashboardApi {
+
+    data class Asset(
+        val balance: Double, val coin: Double, val integral: Int,
+        val recharge: Double, val totalCoin: Double
+    )
+
+    data class Consume(
+        val buyMonth: Double, val buyTotal: Double, val buyCount: Int
+    )
+
+    data class Level(
+        val name: String, val recharge: Double,
+        val nextName: String, val nextRecharge: Double
+    )
+
+    data class Business(
+        val todayIncome: Double, val yesterdayIncome: Double, val weekIncome: Double, val monthIncome: Double,
+        val tradeTotal: Double, val todayOrders: Int, val pendingDelivery: Int,
+        val cardUnsold: Int, val commodityOnline: Int, val commodityCount: Int
+    )
+
+    data class Overview(
+        val username: String, val avatar: String,
+        val asset: Asset, val consume: Consume, val level: Level,
+        val isBusiness: Boolean, val business: Business?
+    )
+
+    fun overview(): Overview {
+        val d = Http.postSync("/user/api/dashboard/index").optJSONObject("data") ?: JSONObject()
+        val a = d.optJSONObject("asset") ?: JSONObject()
+        val c = d.optJSONObject("consume") ?: JSONObject()
+        val l = d.optJSONObject("level") ?: JSONObject()
+        val asset = Asset(
+            Json.dbl(a, "balance"), Json.dbl(a, "coin"), Json.int(a, "integral"),
+            Json.dbl(a, "recharge"), Json.dbl(a, "total_coin")
+        )
+        val consume = Consume(Json.dbl(c, "buy_month"), Json.dbl(c, "buy_total"), Json.int(c, "buy_count"))
+        val level = Level(
+            Json.str(l, "name"), Json.dbl(l, "recharge"),
+            Json.str(l, "next_name"), Json.dbl(l, "next_recharge")
+        )
+        val bizObj = d.optJSONObject("business")
+        val business: Business? = if (bizObj != null) {
+            Business(
+                Json.dbl(bizObj, "today_income"), Json.dbl(bizObj, "yesterday_income"),
+                Json.dbl(bizObj, "week_income"), Json.dbl(bizObj, "month_income"),
+                Json.dbl(bizObj, "trade_total"), Json.int(bizObj, "today_orders"),
+                Json.int(bizObj, "pending_delivery"), Json.int(bizObj, "card_unsold"),
+                Json.int(bizObj, "commodity_online"), Json.int(bizObj, "commodity_count")
+            )
+        } else {
+            null
+        }
+        val isBiz = Json.int(d, "is_business") == 1 || (d.has("is_business") && d.optBoolean("is_business", false))
+        return Overview(
+            Json.str(d, "username"), Json.str(d, "avatar"),
+            asset, consume, level, isBiz, business
+        )
+    }
+
+    data class LevelItem(
+        val id: Int, val name: String, val icon: String, val price: Double,
+        val substation: Int, val topDomain: Int, val supplier: Int, val cost: Double
+    )
+
+    data class LevelsResult(val list: List<LevelItem>, val currentLevel: Int)
+
+    fun levels(): LevelsResult {
+        val d = Http.postSync("/user/api/dashboard/levels").optJSONObject("data") ?: JSONObject()
+        val arr = d.optJSONArray("list") ?: JSONArray()
+        val list = (0 until arr.length()).mapNotNull { i ->
+            val o = arr.optJSONObject(i)
+            if (o == null) null else LevelItem(
+                Json.int(o, "id"), Json.str(o, "name"), Json.str(o, "icon"),
+                Json.dbl(o, "price"), Json.int(o, "substation"),
+                Json.int(o, "top_domain"), Json.int(o, "supplier"), Json.dbl(o, "cost")
+            )
+        }
+        return LevelsResult(list, Json.int(d, "current_level"))
+    }
+
+    data class ShopInfo(
+        val hasShop: Boolean, val shopName: String, val subdomain: String, val topdomain: String,
+        val levelId: Int, val levelName: String
+    )
+
+    fun shop(): ShopInfo {
+        val d = Http.postSync("/user/api/dashboard/shop").optJSONObject("data") ?: JSONObject()
+        val lv = d.optJSONObject("level")
+        val hasShop = Json.int(d, "has_shop") == 1 || (d.has("has_shop") && d.optBoolean("has_shop", false))
+        val levelId = if (lv != null) Json.int(lv, "id") else 0
+        val levelName = if (lv != null) Json.str(lv, "name") else ""
+        return ShopInfo(
+            hasShop, Json.str(d, "shop_name"), Json.str(d, "subdomain"), Json.str(d, "topdomain"),
+            levelId, levelName
+        )
+    }
+
+    fun purchaseLevel(levelId: Int): String {
+        return Http.postSync("/user/api/business/purchase", mapOf("levelId" to levelId.toString())).optString("msg", "开通成功")
+    }
+}
+
+/** 对接白名单接口，对应 /user/api/security/ipWhitelist* */
+object WhitelistApi {
+
+    data class WhitelistData(
+        val list: List<JSONObject>,
+        val limit: Int,
+        val count: Int,
+        val bound: Boolean
+    )
+
+    fun overview(): WhitelistData {
+        val d = Http.postSync("/user/api/security/ipWhitelist").optJSONObject("data") ?: JSONObject()
+        val arr = d.optJSONArray("list") ?: JSONArray()
+        val list = (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }
+        return WhitelistData(
+            list = list,
+            limit = Json.int(d, "limit", 20),
+            count = list.size,
+            bound = d.has("bound") && d.optBoolean("bound", false)
+        )
+    }
+
+    fun add(ip: String, note: String = "", code: String = "", password: String = ""): String {
+        val params = mutableMapOf("ip" to ip.trim())
+        if (note.isNotBlank()) params["note"] = note
+        if (code.isNotBlank()) params["code"] = code
+        if (password.isNotBlank()) params["password"] = password
+        return Http.postSync("/user/api/security/ipWhitelistAdd", params).optString("msg", "已加入白名单")
+    }
+
+    fun remove(id: Int): String {
+        return Http.postSync("/user/api/security/ipWhitelistRemove", mapOf("id" to id.toString())).optString("msg", "已移出白名单")
+    }
 }
