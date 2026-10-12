@@ -68,16 +68,14 @@ fun MineScreen(nav: NavController) {
             }
         }
 
-        if (!loggedIn) {
-            Surface(color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                Text("登录后可查看订单、账单、优惠券等全部功能", Modifier.padding(14.dp), style = MaterialTheme.typography.bodySmall)
-            }
-        }
-
         Spacer(Modifier.height(8.dp))
 
+        SectionTitle("我的账户")
+        MineItem(Icons.Default.Dashboard, "我的主页") { nav.navigate("dashboard") }
+        MineItem(Icons.Default.Storefront, "我的店铺") { nav.navigate("shop") }
+
         SectionTitle("店铺")
-        MineItem(Icons.Default.Storefront, "购买商品") { nav.navigate("home") }
+        MineItem(Icons.Default.ShoppingCart, "购买商品") { nav.navigate("home") }
         MineItem(Icons.Default.ReceiptLong, "购买记录") { nav.navigate("purchase") }
         MineItem(Icons.Default.Search, "订单查询") { nav.navigate("orders") }
         MineItem(Icons.Default.ConfirmationNumber, "我的优惠券") { nav.navigate("coupons") }
@@ -99,6 +97,7 @@ fun MineScreen(nav: NavController) {
         MineItem(Icons.Default.Person, "个人资料") { nav.navigate("profile") }
         MineItem(Icons.Default.Lock, "修改密码") { nav.navigate("password") }
         MineItem(Icons.Default.Security, "安全设置") { nav.navigate("security") }
+        MineItem(Icons.Default.ListAlt, "对接白名单") { nav.navigate("whitelist") }
         MineItem(Icons.Default.Settings, "服务器设置") { nav.navigate("server") }
 
         if (loggedIn) {

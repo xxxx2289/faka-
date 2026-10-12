@@ -11,10 +11,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import cn.xiaobai.acgfaka.user.core.Api
+import cn.xiaobai.acgfaka.user.core.DashboardApi
 import cn.xiaobai.acgfaka.user.core.Http
 import cn.xiaobai.acgfaka.user.core.PayMethod
 import kotlinx.coroutines.Dispatchers
@@ -32,12 +34,14 @@ fun RechargeScreen(nav: NavController) {
     var isError by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
+    var overview by remember { mutableStateOf<DashboardApi.Overview?>(null) }
 
     LaunchedEffect(Unit) {
         scope.launch {
             loading = true
             pays = withContext(Dispatchers.IO) { runCatching { Api.rechargePayMethods() }.getOrDefault(emptyList()) }
             payId = pays.firstOrNull()?.id ?: 0
+            overview = withContext(Dispatchers.IO) { runCatching { DashboardApi.overview() }.getOrNull() }
             loading = false
         }
     }
@@ -56,6 +60,41 @@ fun RechargeScreen(nav: NavController) {
         ) {
             if (loading) { CircularProgressIndicator(); return@Column }
 
+            // 余额 + 元气等级成长
+            overview?.let { o ->
+                Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text("账户余额", style = MaterialTheme.typography.labelMedium)
+                        Text("¥${fmt(o.asset.balance)}", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(6.dp))
+                        Text("充值成功后余额即时更新，可用于购买商品", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+                // 会员成长
+                if (o.level.name.isNotBlank()) {
+                    Card(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(14.dp)) {
+                            Text("会员成长", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.height(6.dp))
+                            Row {
+                                Text(o.level.name, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                                Text("${fmt(o.asset.recharge)} 元气", style = MaterialTheme.typography.bodyMedium)
+                            }
+                            if (o.level.nextName.isNotBlank() && o.level.nextRecharge > 0) {
+                                Spacer(Modifier.height(8.dp))
+                                val progress = (o.asset.recharge / o.level.nextRecharge).coerceIn(0.0, 1.0).toFloat()
+                                LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    "距离 ${o.level.nextName} 还需 ${fmt((o.level.nextRecharge - o.asset.recharge).coerceAtLeast(0.0))} 元气",
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             Text("充值金额", style = MaterialTheme.typography.titleMedium)
             OutlinedTextField(
                 value = amount, onValueChange = { amount = it.filter { c -> c.isDigit() || c == '.' } },
@@ -63,10 +102,13 @@ fun RechargeScreen(nav: NavController) {
                 label = { Text("金额") }, singleLine = true,
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal)
             )
-            // 快捷金额
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("10", "50", "100", "200").forEach { v ->
-                    OutlinedButton(onClick = { amount = v }) { Text("¥$v") }
+            // 快捷金额两行
+            listOf(listOf("10", "50", "100"), listOf("200", "500", "1000")).forEach { rowVals ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    rowVals.forEach { v ->
+                        OutlinedButton(onClick = { amount = v }, modifier = Modifier.weight(1f)) { Text("¥$v") }
+                    }
                 }
             }
 
@@ -101,7 +143,7 @@ fun RechargeScreen(nav: NavController) {
                 modifier = Modifier.fillMaxWidth().height(48.dp)
             ) { Text(if (busy) "处理中…" else "立即充值") }
 
-            Text("提示：充值订单创建后，在浏览器打开支付链接或按站点方式完成支付。", style = MaterialTheme.typography.labelSmall)
+            Text("支付完成后请勿重复提交，页面会自动更新结果。", style = MaterialTheme.typography.labelSmall)
         }
     }
 }
