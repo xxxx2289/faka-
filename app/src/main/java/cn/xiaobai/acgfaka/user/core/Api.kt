@@ -105,6 +105,8 @@ object Api {
 
     fun loginCaptcha(): ByteArray = Http.getBytesSync("/user/captcha/image?action=login&t=${System.currentTimeMillis()}")
     fun registerCaptcha(): ByteArray = Http.getBytesSync("/user/captcha/image?action=register&t=${System.currentTimeMillis()}")
+    /** 下单验证码，仅当站点开启 trade_verification 时需要 */
+    fun tradeCaptcha(): ByteArray = Http.getBytesSync("/user/captcha/image?action=trade&t=${System.currentTimeMillis()}")
 
     fun sendEmailRegisterCaptcha(email: String): String =
         Http.postSync("/user/api/authentication/emailRegisterCaptcha", mapOf("email" to email.trim())).optString("msg", "发送成功")
@@ -129,12 +131,13 @@ object Api {
     // ---------- 下单 ----------
     data class TradeResult(val tradeNo: String, val amount: Double, val payUrl: String?, val payHtml: String?)
 
-    fun trade(itemId: Int, num: Int, payId: Int, race: String = "", sku: Map<String, String> = emptyMap(), cardId: Int = 0, coupon: String = "", contact: String = "", password: String = ""): TradeResult {
+    fun trade(itemId: Int, num: Int, payId: Int, race: String = "", sku: Map<String, String> = emptyMap(), cardId: Int = 0, coupon: String = "", contact: String = "", password: String = "", captcha: String = ""): TradeResult {
         val params = mutableMapOf(
             "item_id" to itemId.toString(), "num" to num.toString(), "pay_id" to payId.toString(),
             "race" to race, "card_id" to cardId.toString(), "coupon" to coupon,
             "contact" to contact, "password" to password
         )
+        if (captcha.isNotBlank()) params["captcha"] = captcha
         sku.forEach { (k, v) -> params["sku[$k]"] = v }
         val d = Http.postSync("/user/api/order/trade", params).optJSONObject("data") ?: JSONObject()
         return TradeResult(
@@ -174,7 +177,7 @@ object Api {
         )
     }
 
-    // ---------- 用户中心：个人 ----------
+    // ---------- 用户中心 ----------
     data class Page(val list: List<JSONObject>, val total: Int)
 
     fun personal(): JSONObject = Http.getSync("/user/api/security/personal").optJSONObject("data") ?: JSONObject()
@@ -194,7 +197,6 @@ object Api {
         return Http.postSync("/user/api/security/password", params).optString("msg", "密码已修改")
     }
 
-    // 安全设置：两步验证
     fun totpStatus(): JSONObject = Http.postSync("/user/api/security/totpStatus").optJSONObject("data") ?: JSONObject()
     fun totpSecret(): JSONObject = Http.postSync("/user/api/security/totpSecret").optJSONObject("data") ?: JSONObject()
     fun totpEnable(code: String): String = Http.postSync("/user/api/security/totpEnable", mapOf("code" to code)).optString("msg", "已开启")
