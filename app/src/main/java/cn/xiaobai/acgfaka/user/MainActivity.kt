@@ -111,6 +111,9 @@ private fun AppRoot() {
             composable("profile") { ProfileScreen(nav) }
             composable("password") { PasswordScreen(nav) }
             composable("security") { SecurityScreen(nav) }
+            composable("dashboard") { DashboardScreen(nav) }
+            composable("shop") { ShopScreen(nav) }
+            composable("whitelist") { WhitelistScreen(nav) }
         }
     }
 }
