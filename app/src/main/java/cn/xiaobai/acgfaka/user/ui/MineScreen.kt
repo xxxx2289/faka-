@@ -73,6 +73,12 @@ fun MineScreen(nav: NavController) {
         SectionTitle("我的账户")
         MineItem(Icons.Default.Dashboard, "我的主页") { nav.navigate("dashboard") }
         MineItem(Icons.Default.Storefront, "我的店铺") { nav.navigate("shop") }
+        SectionTitle("商家管理")
+        MineItem(Icons.Default.Assessment, "经营看板") { nav.navigate("m_dashboard") }
+        MineItem(Icons.Default.ReceiptLong, "商家订单") { nav.navigate("m_orders") }
+        MineItem(Icons.Default.Inventory2, "商品管理") { nav.navigate("m_commodities") }
+        MineItem(Icons.Default.Key, "卡密管理") { nav.navigate("m_cards") }
+        MineItem(Icons.Default.Category, "分类管理") { nav.navigate("m_categories") }
 
         SectionTitle("店铺")
         MineItem(Icons.Default.ShoppingCart, "购买商品") { nav.navigate("home") }
